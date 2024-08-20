@@ -37,6 +37,29 @@ def transform_perspective(input_image, contour_points):
 
     return output_image
 
+def improve_edge_detection(image):
+    # Convert to grayscale if it's not already
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+
+    # Apply Gaussian blur to reduce noise
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Apply adaptive thresholding
+    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY_INV, 11, 2)
+
+    # Perform morphological operations to close gaps
+    kernel = np.ones((3,3), np.uint8)
+    morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+    # Use Canny edge detection with lower thresholds
+    edges = cv2.Canny(morph, 30, 100)
+
+    return edges
+
 def process_image():
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument("-i", "--image", required=True, help="Path to the image file")
@@ -48,29 +71,29 @@ def process_image():
     image_ratio = original_image.shape[0] / 500.0
     resized_image = imutils.resize(original_image, height=500)
 
-    gray_image = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
-    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
-    edge_detected = cv2.Canny(blurred_image, 30, 150)
+    edge_detected = improve_edge_detection(resized_image)
 
     # STEP 1: Edge Detection
     print("STEP 1: Edge Detection")
     cv2.imshow("STEP 1: Edges", edge_detected)
 
-    contours = cv2.findContours(edge_detected.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cv2.findContours(edge_detected.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     contours = imutils.grab_contours(contours)
     sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
     filtered_contours = []
     image_area = resized_image.shape[0] * resized_image.shape[1]
-    min_area = image_area * 0.7
+    min_area = image_area * 0.2
     max_area = image_area * 1
     for contour in sorted_contours:
-        if cv2.contourArea(contour) > min_area and cv2.contourArea(contour) < max_area:
+        contour_area = cv2.contourArea(contour)
+        if min_area <= contour_area <= max_area:
             filtered_contours.append(contour)
-    print("Filtered Contours: ", len(sorted_contours))
+    print("Sorted Contours: ", len(sorted_contours))
+    print("Filtered Contours: ", len(filtered_contours))
 
     detected_screen = None
-    for contour in sorted_contours:
+    for contour in filtered_contours:
         contour_perimeter = cv2.arcLength(contour, True)
         approximated_contour = cv2.approxPolyDP(contour, 0.04 * contour_perimeter, True)
 
