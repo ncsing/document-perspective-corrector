@@ -41,7 +41,7 @@ def process_image():
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument("-i", "--image", required=True, help="Path to the image file")
     argument_parser.add_argument("-o", "--output", required=True, help="Path to the output image file")
-    argument_parser.add_argument("-m", "--mask", required=True, help="Path to the mask image file")
+    argument_parser.add_argument("-m", "--mask", required=False, help="Path to the mask image file")
     arguments = vars(argument_parser.parse_args())
 
     original_image = cv2.imread(arguments["image"])
@@ -50,20 +50,36 @@ def process_image():
 
     gray_image = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
     blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
-    edge_detected = cv2.Canny(blurred_image, 75, 200)
+    edge_detected = cv2.Canny(blurred_image, 30, 150)
 
     # STEP 1: Edge Detection
-    # print("STEP 1: Edge Detection")
-    # cv2.imshow("Edges", edge_detected)
+    print("STEP 1: Edge Detection")
+    cv2.imshow("STEP 1: Edges", edge_detected)
 
     contours = cv2.findContours(edge_detected.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = imutils.grab_contours(contours)
-    sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
+    sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+    filtered_contours = []
+    image_area = resized_image.shape[0] * resized_image.shape[1]
+    min_area = image_area * 0.7
+    max_area = image_area * 1
+    for contour in sorted_contours:
+        if cv2.contourArea(contour) > min_area and cv2.contourArea(contour) < max_area:
+            filtered_contours.append(contour)
+    print("Filtered Contours: ", len(sorted_contours))
 
     detected_screen = None
     for contour in sorted_contours:
         contour_perimeter = cv2.arcLength(contour, True)
-        approximated_contour = cv2.approxPolyDP(contour, 0.02 * contour_perimeter, True)
+        approximated_contour = cv2.approxPolyDP(contour, 0.04 * contour_perimeter, True)
+
+        # Show the approximated contour
+        print("Approximated Contour: ", len(approximated_contour))
+        approximated_contour_image = np.zeros(resized_image.shape, dtype=np.uint8)
+        cv2.drawContours(approximated_contour_image, [approximated_contour], -1, (0, 255, 0), 2)
+        cv2.imshow("STEP 2: Approximated Contour", approximated_contour_image)
+        cv2.waitKey(0)
 
         if len(approximated_contour) == 4:
             detected_screen = approximated_contour
@@ -75,16 +91,18 @@ def process_image():
         return
 
     # STEP 2: Finding Boundary
-    # print("STEP 2: Finding Boundary")
+    print("STEP 2: Finding Boundary")
     cv2.drawContours(resized_image, [detected_screen], -1, (0, 255, 0), 2)
-    # cv2.imshow("Boundary", resized_image)
+    cv2.imshow("Boundary", resized_image)
 
     transformed_image = transform_perspective(original_image, detected_screen.reshape(4, 2) * image_ratio)
     grayscale_transformed = cv2.cvtColor(transformed_image, cv2.COLOR_BGR2GRAY)
 
     # STEP 3: Apply Perspective Transform
-    # print("STEP 3: Apply Perspective Transform")
-    # cv2.imshow("Scanned Image", transformed_image)
+    print("STEP 3: Apply Perspective Transform")
+    cv2.imshow("Scanned Image", transformed_image)
+
+    cv2.waitKey(0)
 
     
     is_mask = True if arguments["mask"] else False
