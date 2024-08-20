@@ -94,19 +94,19 @@ def process_image():
 
     detected_screen = None
     for contour in filtered_contours:
-        contour_perimeter = cv2.arcLength(contour, True)
-        approximated_contour = cv2.approxPolyDP(contour, 0.04 * contour_perimeter, True)
+        rect = cv2.minAreaRect(contour)
+        box = cv2.boxPoints(rect)
+        box = np.int32(box)
 
-        # Show the approximated contour
-        print("Approximated Contour: ", len(approximated_contour))
-        approximated_contour_image = np.zeros(resized_image.shape, dtype=np.uint8)
-        cv2.drawContours(approximated_contour_image, [approximated_contour], -1, (0, 255, 0), 2)
-        cv2.imshow("STEP 2: Approximated Contour", approximated_contour_image)
+        # Show the minimum area rectangle
+        print("Minimum Area Rectangle Points: ", len(box))
+        min_area_rect_image = np.zeros(resized_image.shape, dtype=np.uint8)
+        cv2.drawContours(min_area_rect_image, [box], 0, (0, 255, 0), 2)
+        cv2.imshow("STEP 2: Minimum Area Rectangle", min_area_rect_image)
         cv2.waitKey(0)
 
-        if len(approximated_contour) == 4:
-            detected_screen = approximated_contour
-            break
+        detected_screen = box
+        break
     
     if detected_screen is None:
         print("No valid screen contour found.")
