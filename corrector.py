@@ -60,6 +60,26 @@ def improve_edge_detection(image):
 
     return edges
 
+def approximate_to_rectangle(contour, increment=0.01, max_iterations=100):
+    perimeter = cv2.arcLength(contour, True)
+    low, high = 0, 0.1  # Starting bounds for epsilon
+    iterations = 0
+
+    while iterations < max_iterations:
+        epsilon = (high + low) / 2
+        approx = cv2.approxPolyDP(contour, epsilon * perimeter, True)
+
+        if len(approx) < 4:
+            high = epsilon  # Need more detail
+        elif len(approx) > 4:
+            low = epsilon  # Can simplify more
+        else:
+            return approx  # Found rectangle
+
+        iterations += 1
+
+    return approx  # Return the best attempt
+
 def process_image():
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument("-i", "--image", required=True, help="Path to the image file")
@@ -94,19 +114,21 @@ def process_image():
 
     detected_screen = None
     for contour in filtered_contours:
-        rect = cv2.minAreaRect(contour)
-        box = cv2.boxPoints(rect)
-        box = np.int32(box)
+        contour_perimeter = cv2.arcLength(contour, True)
+        approximated_contour = cv2.approxPolyDP(contour, 0.04 * contour_perimeter, True)
 
-        # Show the minimum area rectangle
-        print("Minimum Area Rectangle Points: ", len(box))
-        min_area_rect_image = np.zeros(resized_image.shape, dtype=np.uint8)
-        cv2.drawContours(min_area_rect_image, [box], 0, (0, 255, 0), 2)
-        cv2.imshow("STEP 2: Minimum Area Rectangle", min_area_rect_image)
-        cv2.waitKey(0)
+        # Show the approximated contour
+        print("Approximated Contour: ", len(approximated_contour))
+        approximated_contour_image = np.zeros(resized_image.shape, dtype=np.uint8)
+        cv2.drawContours(approximated_contour_image, [approximated_contour], -1, (0, 255, 0), 2)
+        
+        refined_contour = approximate_to_rectangle(approximated_contour)
+        cv2.drawContours(approximated_contour_image, [refined_contour], -1, (0, 0, 255), 2)
+        cv2.imshow("STEP 2: Approximated Contour", approximated_contour_image)
+        if len(refined_contour) == 4:
+            detected_screen = refined_contour
+            break
 
-        detected_screen = box
-        break
     
     if detected_screen is None:
         print("No valid screen contour found.")
